@@ -328,7 +328,7 @@ const HOURS_BY_CAT = {
 };
 
 /* ---------- Data ---------- */
-const BUSINESSES = [
+const SEED_BUSINESSES = [
 // ===== NETANYA =====
 {name:"Fratelli",addr:"שדרות גיבורי ישראל 17, נתניה",lat:32.281253,lng:34.862075,cat:'restaurant',city:'netanya',rating:4.5,phone:'09-878-7690',status:'green'},
 {name:"Nishi",addr:"שדרות עובד בן עמי 113, נתניה",lat:32.305069,lng:34.843464,cat:'restaurant',city:'netanya',rating:4.6,phone:'09-878-8888',status:'green'},
@@ -446,6 +446,9 @@ const BUSINESSES = [
 {name:"Ringo's Classic Barbershop",addr:"שרה 12, חיפה",lat:32.820106,lng:34.996150,cat:'barber',city:'haifa',rating:4.9,phone:'054-301-5202',status:'gold'},
 ];
 
+/* Live data replaces this at runtime; the seed keeps the map usable offline. */
+let BUSINESSES = SEED_BUSINESSES;
+
 const CENTER = [32.305, 34.855];
 let scope = 'netanya';
 let activeCat = null;
@@ -468,6 +471,7 @@ document.querySelectorAll('#locScope button').forEach(b=>b.addEventListener('cli
   scope = b.dataset.scope;
   document.querySelectorAll('#locScope button').forEach(x=>x.classList.toggle('active',x===b));
   renderAll(true);
+  loadLive();
 }));
 
 document.querySelectorAll('#viewTabs button').forEach(b=>b.addEventListener('click',()=>{
@@ -483,13 +487,18 @@ document.querySelectorAll('#viewTabs button').forEach(b=>b.addEventListener('cli
 const map = L.map('map',{zoomControl:true,attributionControl:false}).setView(CENTER, 13);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
 
-const markers = BUSINESSES.map((b,i)=>{
+let markers = [];
+function buildMarkers(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers = BUSINESSES.map((b,i)=>{
   const icon = L.divIcon({className:'',html:`<div class="pin ${b.status}"><div class="pin-ring"></div><div class="pin-core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ICONS[b.cat]}</svg></div></div>`,iconSize:[36,36],iconAnchor:[18,18]});
   const m = L.marker([b.lat,b.lng],{icon}).addTo(map);
   m.bindPopup(`<div class="popup-name">${b.name}</div><div class="popup-status" style="color:${b.status==='gold'?'var(--gold)':b.status==='green'?'var(--green)':'var(--red)'}">${STATUS_LABEL[b.status]}</div>`);
   m.on('click',()=>selectBusiness(i));
   return m;
-});
+  });
+}
+buildMarkers();
 
 function distanceKm(lat,lng){
   const R=6371,dLat=(lat-CENTER[0])*Math.PI/180,dLng=(lng-CENTER[1])*Math.PI/180;
@@ -563,6 +572,72 @@ document.getElementById('cta').addEventListener('click', ()=>{ if(selected!==nul
 
 renderPills();
 renderAll(true);
+
+/* ---------- Live business data ---------- */
+const SCAN_CITIES = ['netanya','telaviv','haifa'];
+const liveByCity = {};      // city -> business[] already fetched
+let dataSource = 'seed';    // 'seed' | 'live' | 'partial'
+
+const sourceEl = document.createElement('div');
+sourceEl.id = 'dataSource';
+sourceEl.style.cssText = 'font-size:11px;color:var(--muted);padding:6px 2px;display:flex;align-items:center;gap:6px';
+listEl.parentNode.insertBefore(sourceEl, listEl);
+
+function renderSource(state, note){
+  const dot = c => `<span style="width:7px;height:7px;border-radius:50%;background:${c};display:inline-block"></span>`;
+  if(state==='loading') sourceEl.innerHTML = dot('var(--muted)') + 'סורק עסקים אמיתיים...';
+  else if(state==='live') sourceEl.innerHTML = dot('var(--green)') + `נתונים חיים מ-Google Places · ${note}`;
+  else if(state==='partial') sourceEl.innerHTML = dot('var(--gold)') + `נתונים חיים חלקיים · ${note}`;
+  else sourceEl.innerHTML = dot('var(--gold)') + 'נתוני הדגמה · ' + note;
+}
+
+async function fetchCity(city){
+  if(liveByCity[city]) return liveByCity[city];
+  const res = await fetch(`/api/businesses?city=${encodeURIComponent(city)}`);
+  if(!res.ok){
+    let detail = `שגיאה ${res.status}`;
+    try{ const e = await res.json(); if(e && e.error) detail = e.error; }catch{}
+    throw new Error(detail);
+  }
+  const data = await res.json();
+  liveByCity[city] = data.businesses || [];
+  if(data.partial) dataSource = 'partial';
+  return liveByCity[city];
+}
+
+/* Refresh the dataset for whatever the current scope needs. */
+async function loadLive(){
+  const wanted = scope==='all' ? SCAN_CITIES : [scope];
+  const missing = wanted.filter(c=>!liveByCity[c]);
+  if(!missing.length){ applyLive(wanted); return; }
+
+  renderSource('loading');
+  try{
+    await Promise.all(missing.map(fetchCity));
+    applyLive(wanted);
+  }catch(err){
+    // Keep the seed data on screen rather than emptying the map.
+    BUSINESSES = SEED_BUSINESSES;
+    selected = null;
+    buildMarkers();
+    renderAll(true);
+    renderSource('seed', String(err.message||err));
+  }
+}
+
+function applyLive(cities){
+  const merged = cities.flatMap(c=>liveByCity[c]||[]);
+  if(!merged.length){ renderSource('seed','לא נמצאו עסקים'); return; }
+  BUSINESSES = merged;
+  selected = null;
+  document.getElementById('cta').disabled = true;
+  buildMarkers();
+  renderAll(true);
+  const gold = merged.filter(b=>b.status==='gold').length;
+  renderSource(dataSource==='partial'?'partial':'live', `${merged.length} עסקים · ${gold} ללא אתר`);
+}
+
+loadLive();
 
 /* ---------- AI Site Generator ---------- */
 const modalBackdrop = document.getElementById('modalBackdrop');
