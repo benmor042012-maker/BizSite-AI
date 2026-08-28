@@ -117,6 +117,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .leaflet-popup-tip{background:var(--surface2)}
 .popup-name{font-family:'Rubik';font-weight:700;font-size:13.5px;margin-bottom:2px}
 .popup-status{font-size:11.5px}
+/* Inverts the light OSM tiles into a dark basemap. Scoped to the tile pane so
+   markers and controls are untouched. */
+#map.tiles-darkened .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.75)}
+.leaflet-control-attribution{background:rgba(10,13,18,.72)!important;color:#5b6472!important;font-size:9.5px}
+.leaflet-control-attribution a{color:#7b8695!important}
 
 /* ===== GENERATOR MODAL ===== */
 .modal-backdrop{position:fixed;inset:0;background:rgba(6,7,10,0.82);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
@@ -180,7 +185,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   </div>
 
   <div class="main" id="mapView">
-    <div id="map"></div>
+    <div id="map" class="tiles-darkened"></div>
     <div class="legend">
       <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span>אין אתר <b id="cnt-gold">0</b></div>
       <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>אתר טוב <b id="cnt-green">0</b></div>
@@ -484,8 +489,19 @@ document.querySelectorAll('#viewTabs button').forEach(b=>b.addEventListener('cli
 }));
 
 /* ---------- Map ---------- */
-const map = L.map('map',{zoomControl:true,attributionControl:false}).setView(CENTER, 13);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
+const map = L.map('map',{zoomControl:true,attributionControl:true}).setView(CENTER, 13);
+/* CARTO's dark basemap now demands an API key and stamps "API KEY REQUIRED"
+   across every tile, so fall back to OpenStreetMap and darken it in CSS to
+   keep the dark theme. Set TILE_KEY to restore the original CARTO look. */
+const TILE_KEY = '';
+if(TILE_KEY){
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${TILE_KEY}`,
+    {maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap, © CARTO'}).addTo(map);
+  document.getElementById('map').classList.remove('tiles-darkened');
+} else {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap'}).addTo(map);
+}
 
 let markers = [];
 function buildMarkers(){
