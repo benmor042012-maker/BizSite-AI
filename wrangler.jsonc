@@ -3,6 +3,8 @@
   "name": "bizsite-ai",
   "main": "src/index.js",
   "compatibility_date": "2026-08-28",
+  // Guarantees the *.workers.dev route on every deploy.
+  "workers_dev": true,
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
