@@ -13,6 +13,12 @@
     // not-found handling would swallow /api/* into index.html.
     "run_worker_first": ["/api/*"]
   },
+  // The 3D export ships its source design spec inside the zip. Bundling the
+  // vendored prompts as text modules keeps vendor/ the single copy - no build
+  // step, and no runtime asset fetch that could fail mid-download.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.md"], "fallthrough": true }
+  ],
   "observability": {
     "enabled": true
   }

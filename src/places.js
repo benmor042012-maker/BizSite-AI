@@ -10,6 +10,8 @@
  *   green = a real site of its own
  */
 
+import { CATEGORY_PHRASES } from './design/categories.js';
+
 const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 
 const FIELD_MASK = [
@@ -31,25 +33,15 @@ export const CITIES = {
 
 /**
  * Category ids used by the UI, with the Hebrew search phrase for each.
+ *
  * Text search is used rather than nearby-search place types because several of
  * these categories (photo studios, driving schools) have no clean type match,
  * and Hebrew queries return far better results for small local businesses.
+ *
+ * The list is derived from the design briefs rather than duplicated here, so a
+ * category can never exist on the map without a design to build it with.
  */
-export const CATEGORIES = {
-  restaurant: 'מסעדות',
-  cafe: 'בתי קפה',
-  bakery: 'מאפיות',
-  barber: 'מספרות',
-  beauty: 'מכוני יופי',
-  dentist: 'רופאי שיניים',
-  gym: 'חדרי כושר',
-  garage: 'מוסכים',
-  flower: 'חנויות פרחים',
-  lawyer: 'עורכי דין',
-  photo: 'סטודיו צילום',
-  pet: 'חנויות חיות מחמד',
-  driving: 'בתי ספר לנהיגה',
-};
+export const CATEGORIES = CATEGORY_PHRASES;
 
 /**
  * Hosts that are somebody else's page rather than the business's own site.

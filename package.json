@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node test/places.test.mjs"
+    "test": "node test/places.test.mjs && node test/design.test.mjs && node --import ./test/md-text-loader.mjs test/worker.test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.127.0"

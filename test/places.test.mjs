@@ -1,4 +1,5 @@
 import { classifyWebsite, toBusiness, searchCategory, CITIES, CATEGORIES } from '../src/places.js';
+import { DESIGN_BRIEFS } from '../src/design/categories.js';
 
 let fail = 0;
 const eq = (got, want, label) => {
@@ -68,7 +69,10 @@ try {
   eq(e.message.includes('403') && e.message.includes('cafe/netanya'), true, 'non-200 throws with status and context');
 }
 
-eq(Object.keys(CATEGORIES).length, 13, 'all 13 UI categories are mapped');
+// The category list is derived from the design briefs, so this asserts the
+// derivation still holds rather than pinning a count that any new trade breaks.
+eq(Object.keys(CATEGORIES), Object.keys(DESIGN_BRIEFS), 'categories are the design briefs, in order');
+eq(Object.values(CATEGORIES).every(p => typeof p === 'string' && p.length > 1), true, 'every category has a search phrase');
 eq(Object.keys(CITIES), ['netanya','telaviv','haifa'], 'all 3 UI cities are mapped');
 
 console.log(fail ? `\n${fail} FAILURE(S)` : '\nall assertions passed');
