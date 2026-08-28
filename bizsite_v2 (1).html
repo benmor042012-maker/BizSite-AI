@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BizSite AI — סריקת עסקים</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800;900&family=Heebo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#0a0d12; --surface:#12161e; --surface2:#171c26;
+  --line:rgba(255,255,255,0.08); --line-strong:rgba(255,255,255,0.14);
+  --text:#f1efe9; --muted:#8b93a1;
+  --gold:#d4a24e; --gold-soft:rgba(212,162,78,0.16);
+  --green:#3ec77e; --green-soft:rgba(62,199,126,0.16);
+  --red:#e5584a; --red-soft:rgba(229,88,74,0.16);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--void);color:var(--text);font-family:'Heebo',sans-serif;overflow:hidden;height:100vh}
+h1,h2,h3,.disp{font-family:'Rubik',sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(circle at 15% 10%, rgba(212,162,78,0.07), transparent 45%),
+             radial-gradient(circle at 85% 85%, rgba(62,199,126,0.05), transparent 50%)}
+.app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
+
+/* ===== TOP BAR ===== */
+.topbar{display:flex;flex-direction:column;gap:10px;padding:12px 20px;background:rgba(18,22,30,0.94);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);z-index:30}
+.topbar-row1{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--gold),#8a6a2e);display:flex;align-items:center;justify-content:center;font-family:'Rubik';font-weight:900;font-size:15px;color:#0a0d12;box-shadow:0 0 20px rgba(212,162,78,0.35)}
+.brand-name{font-family:'Rubik';font-weight:800;font-size:17px}
+.brand-name span{color:var(--gold)}
+
+.scope{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:4px;flex-shrink:0}
+.scope button{border:none;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;cursor:pointer;transition:.2s;white-space:nowrap}
+.scope button.active{background:var(--gold);color:#100c04}
+
+.pills{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding:1px 0 3px}
+.pills::-webkit-scrollbar{display:none}
+.pill{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:100px;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer;transition:.2s;flex-shrink:0}
+.pill:hover{border-color:var(--line-strong);color:var(--text)}
+.pill.active{background:linear-gradient(135deg,rgba(212,162,78,0.24),rgba(212,162,78,0.1));border-color:rgba(212,162,78,0.55);color:var(--gold)}
+.pill svg{width:14px;height:14px;flex-shrink:0}
+
+/* ===== MAIN ===== */
+.main{flex:1;display:flex;overflow:hidden;position:relative}
+#map{flex:1;height:100%}
+.leaflet-container{background:#0d1017 !important;font-family:'Heebo',sans-serif}
+.leaflet-control-zoom{border:none !important}
+.leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border:1px solid var(--line) !important}
+
+.legend{position:absolute;bottom:20px;left:20px;z-index:15;display:flex;gap:10px;background:rgba(18,22,30,0.88);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:9px 13px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend-dot{width:9px;height:9px;border-radius:50%}
+.legend-item b{color:var(--text);font-weight:600;margin-inline-start:2px}
+
+/* ===== SIDE PANEL ===== */
+.panel{width:390px;flex-shrink:0;background:rgba(15,18,25,0.93);backdrop-filter:blur(14px);border-inline-start:1px solid var(--line);display:flex;flex-direction:column;z-index:10}
+.panel-head{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
+.panel-eyebrow{font-size:11px;color:var(--gold);letter-spacing:.08em;font-weight:600;margin-bottom:3px;display:block}
+.panel-head h2{margin:0 0 5px;font-size:19px;font-weight:800}
+.panel-sub{color:var(--muted);font-size:12.5px;margin:0}
+.search{margin:12px 18px 2px;position:relative}
+.search input{width:100%;padding:10px 38px 10px 13px;border-radius:11px;background:var(--surface);border:1px solid var(--line);color:var(--text);font:inherit;font-size:13px;outline:none;transition:.2s}
+.search input:focus{border-color:rgba(212,162,78,0.5)}
+.search svg{position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--muted)}
+
+.summary{display:flex;gap:7px;margin:11px 18px 4px}
+.sumchip{flex:1;text-align:center;padding:8px 5px;border-radius:11px;background:var(--surface)}
+.sumchip .n{font-family:'JetBrains Mono';font-weight:600;font-size:15px;display:block}
+.sumchip .l{font-size:10px;color:var(--muted);margin-top:2px;display:block}
+.sumchip.gold .n{color:var(--gold)} .sumchip.green .n{color:var(--green)} .sumchip.red .n{color:var(--red)}
+
+.list{flex:1;overflow-y:auto;padding:8px 12px 16px}
+.list::-webkit-scrollbar{width:6px}
+.list::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+
+.card{display:flex;gap:11px;align-items:flex-start;padding:12px 13px;border-radius:14px;margin-bottom:7px;background:var(--surface);border:1px solid var(--line);border-inline-end:3px solid transparent;cursor:pointer;transition:.2s ease}
+.card:hover{background:var(--surface2);border-color:var(--line-strong)}
+.card.selected{background:var(--surface2);box-shadow:0 0 0 1px var(--line-strong) inset}
+.card.status-gold{border-inline-end-color:var(--gold)}
+.card.status-green{border-inline-end-color:var(--green)}
+.card.status-red{border-inline-end-color:var(--red)}
+.card-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-icon svg{width:17px;height:17px}
+.status-gold .card-icon{background:var(--gold-soft);color:var(--gold)}
+.status-green .card-icon{background:var(--green-soft);color:var(--green)}
+.status-red .card-icon{background:var(--red-soft);color:var(--red)}
+.card-body{flex:1;min-width:0}
+.card-name{font-weight:600;font-size:14px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-addr{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;display:flex;gap:5px;align-items:center}
+.city-tag{background:var(--surface2);padding:1px 6px;border-radius:6px;font-size:10px;flex-shrink:0}
+.card-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.status-tag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:100px}
+.status-gold .status-tag{background:var(--gold-soft);color:var(--gold)}
+.status-green .status-tag{background:var(--green-soft);color:var(--green)}
+.status-red .status-tag{background:var(--red-soft);color:var(--red)}
+.dist{font-size:10.5px;color:var(--muted);font-family:'JetBrains Mono';margin-inline-start:auto}
+.rating{font-size:10.5px;color:var(--muted)}
+
+.cta{margin:0 18px 14px;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--gold),#a9793a);color:#100c04;font-family:'Rubik';font-weight:800;font-size:13.5px;cursor:pointer;box-shadow:0 8px 20px rgba(212,162,78,0.25);transition:.2s}
+.cta:hover{transform:translateY(-1px)}
+.cta:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+
+.pin{position:relative;width:36px;height:36px}
+.pin-ring{position:absolute;inset:0;border-radius:50%;animation:ping 2.4s ease-out infinite}
+.pin-core{position:absolute;inset:5px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.25);box-shadow:0 2px 10px rgba(0,0,0,0.5)}
+.pin-core svg{width:14px;height:14px;color:#0a0d12}
+.pin.gold .pin-ring{background:rgba(212,162,78,0.35)} .pin.gold .pin-core{background:var(--gold)}
+.pin.green .pin-ring{background:rgba(62,199,126,0.35)} .pin.green .pin-core{background:var(--green)}
+.pin.red .pin-ring{background:rgba(229,88,74,0.35)} .pin.red .pin-core{background:var(--red)}
+@keyframes ping{0%{transform:scale(0.7);opacity:.9}70%{transform:scale(1.9);opacity:0}100%{opacity:0}}
+
+.leaflet-popup-content-wrapper{background:var(--surface2);color:var(--text);border-radius:12px;border:1px solid var(--line-strong)}
+.leaflet-popup-tip{background:var(--surface2)}
+.popup-name{font-family:'Rubik';font-weight:700;font-size:13.5px;margin-bottom:2px}
+.popup-status{font-size:11.5px}
+
+/* ===== GENERATOR MODAL ===== */
+.modal-backdrop{position:fixed;inset:0;background:rgba(6,7,10,0.82);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-backdrop.open{opacity:1;pointer-events:auto}
+.modal{width:min(920px,94vw);height:min(720px,88vh);background:var(--surface);border:1px solid var(--line-strong);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,0.5)}
+.modal-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);flex-shrink:0}
+.modal-title{font-family:'Rubik';font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.modal-close{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--surface2);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px}
+.modal-close:hover{color:var(--text)}
+.modal-body{flex:1;overflow:hidden;position:relative;background:#0d1017}
+
+/* generation progress */
+.gen-wrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px}
+.gen-orb{width:64px;height:64px;border-radius:50%;position:relative}
+.gen-orb::before,.gen-orb::after{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid var(--gold);opacity:.5;animation:ping 1.6s ease-out infinite}
+.gen-orb::after{animation-delay:.5s}
+.gen-orb-core{position:absolute;inset:14px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#8a6a2e)}
+.gen-title{font-family:'Rubik';font-weight:800;font-size:16px;text-align:center}
+.gen-steps{display:flex;flex-direction:column;gap:10px;width:min(360px,90%)}
+.gen-step{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);opacity:.35;transition:.3s}
+.gen-step.active{opacity:1;color:var(--text)}
+.gen-step.done{opacity:.7;color:var(--green)}
+.gen-check{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-strong);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.gen-step.done .gen-check{border-color:var(--green);background:var(--green-soft)}
+.gen-step.active .gen-check{border-color:var(--gold)}
+
+/* browser mockup */
+.browser{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transition:opacity .4s}
+.browser.show{opacity:1}
+.browser-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#1a1d24;border-bottom:1px solid var(--line);flex-shrink:0}
+.browser-dots{display:flex;gap:5px}
+.browser-dots span{width:9px;height:9px;border-radius:50%;background:#3a3d45}
+.browser-url{flex:1;background:#0d1017;border-radius:100px;padding:6px 14px;font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono';text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browser-badge{font-size:10.5px;background:var(--green-soft);color:var(--green);padding:4px 10px;border-radius:100px;font-weight:600;flex-shrink:0}
+.browser-frame{flex:1;overflow-y:auto;background:#fff}
+
+@media(max-width:820px){
+  .panel{position:absolute;inset-inline-end:0;top:0;bottom:0;width:88%;max-width:380px;box-shadow:-20px 0 40px rgba(0,0,0,0.4)}
+  .brand-name{font-size:14px}
+  .scope button{padding:7px 12px;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="topbar-row1">
+      <div class="brand"><div class="brand-mark">B</div><div class="brand-name">Biz<span>Site</span> AI</div></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="scope" id="viewTabs">
+          <button data-view="map" class="active">🗺️ מפה</button>
+          <button data-view="crm">📋 מעקב פניות</button>
+        </div>
+        <div class="scope" id="locScope">
+          <button data-scope="netanya" class="active">📍 נתניה</button>
+          <button data-scope="all">🇮🇱 כל הארץ</button>
+        </div>
+      </div>
+    </div>
+    <div class="pills" id="pills"></div>
+  </div>
+
+  <div class="main" id="mapView">
+    <div id="map"></div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span>אין אתר <b id="cnt-gold">0</b></div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>אתר טוב <b id="cnt-green">0</b></div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>אתר חלש <b id="cnt-red">0</b></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">שלב 2 · בחירת עסק</span>
+        <h2>עסקים באזורך</h2>
+        <p class="panel-sub">בחר עסק כדי להכין לו אתר AI בזמן אמת</p>
+      </div>
+      <div class="search">
+        <input id="searchInput" placeholder="חפש עסק, כתובת או תחום...">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </div>
+      <div class="summary">
+        <div class="sumchip gold"><span class="n mono" id="sum-gold">0</span><span class="l">אין אתר</span></div>
+        <div class="sumchip green"><span class="n mono" id="sum-green">0</span><span class="l">אתר טוב</span></div>
+        <div class="sumchip red"><span class="n mono" id="sum-red">0</span><span class="l">אתר חלש</span></div>
+      </div>
+      <div class="list" id="list"></div>
+      <button class="cta" id="cta" disabled>🪄 צור אתר AI לעסק שנבחר</button>
+    </div>
+  </div>
+
+  <div class="main" id="crmView" style="display:none;flex-direction:column;padding:20px 6%;overflow-y:auto">
+    <div style="max-width:900px;margin:0 auto;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <h2 style="margin:0 0 4px;font-size:20px;font-weight:800">מעקב פניות ללקוחות</h2>
+          <p style="margin:0;color:var(--muted);font-size:13px">עסקים שסימנת מהמפה נכנסים לכאן אוטומטית — כדי שלא תתקשר פעמיים לאותו עסק</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="pill" id="crmExport" style="cursor:pointer">⬇ גיבוי JSON</button>
+          <button class="pill" id="crmImportBtn" style="cursor:pointer">⬆ ייבוא</button>
+          <input id="crmImportFile" type="file" accept=".json" style="display:none">
+        </div>
+      </div>
+      <div class="summary" style="margin:0 0 14px">
+        <div class="sumchip"><span class="n mono" id="crm-total">0</span><span class="l">סה״כ</span></div>
+        <div class="sumchip green"><span class="n mono" id="crm-contacted">0</span><span class="l">התקשרתי</span></div>
+        <div class="sumchip gold"><span class="n mono" id="crm-offered">0</span><span class="l">הצעתי אתר</span></div>
+        <div class="sumchip red"><span class="n mono" id="crm-notyet">0</span><span class="l">טרם פניתי</span></div>
+      </div>
+      <div class="search" style="margin:0 0 14px">
+        <input id="crmSearch" placeholder="חפש בפניות שלך...">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </div>
+      <div id="crmList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-title" id="modalTitle">🪄 בונה אתר...</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="modalAddCrm" class="pill" style="cursor:pointer;background:var(--surface2);border:1px solid var(--line);color:var(--text)">➕ הוסף למעקב</button>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="gen-wrap" id="genWrap">
+        <div class="gen-orb"><div class="gen-orb-core"></div></div>
+        <div class="gen-title" id="genTitle"></div>
+        <div class="gen-steps" id="genSteps"></div>
+      </div>
+      <div class="browser" id="browser">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url" id="browserUrl"></div>
+          <div class="browser-badge">✓ פורסם</div>
+        </div>
+        <div class="browser-frame" id="browserFrame"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------- Icons ---------- */
+const ICONS = {
+  restaurant:'<path d="M7 2v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V2M9 11v11M15 2c-1.5 1.5-2 3-2 5s.5 3.5 2 5v9"/>',
+  cafe:'<path d="M3 8h14v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8Z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/>',
+  bakery:'<path d="M4 13c0-4.5 3.6-8 8-8s8 3.5 8 8-3.6 6-8 6-8-1.5-8-6Z"/><path d="M8 10c1-1 2-1.5 4-1.5s3 .5 4 1.5"/>',
+  barber:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8.5 19 19M8.5 15.5 19 5M14.5 12 20 12"/>',
+  beauty:'<path d="M12 3c1 3-1 4-1 6 0 2 2 3 2 5 0 2-2 3-2 3M7 8c2 1 2 3 2 3M17 8c-2 1-2 3-2 3"/>',
+  dentist:'<path d="M12 3C9.8 3 8 4.6 8 7c0 1.3-.6 2.2-.6 4.3 0 3.4 1.1 8.7 2.3 8.7 1 0 1-3.4 2.3-3.4S13.3 20 14.3 20c1.2 0 2.3-5.3 2.3-8.7C16.6 4.6 14.2 3 12 3Z"/>',
+  gym:'<path d="M7 12h10"/><rect x="3" y="8" width="3" height="8" rx="1"/><rect x="18" y="8" width="3" height="8" rx="1"/>',
+  garage:'<path d="M14.7 6.3a5 5 0 0 0-7.1 7.1L3 18v3h3l4.6-4.6a5 5 0 0 0 7.1-7.1l-3.5 3.5-2-2 3.5-3.5Z"/>',
+  flower:'<circle cx="12" cy="12" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="12" r="2"/>',
+  lawyer:'<path d="M12 3v18M5 21h14M5 7h14M5 7 2 13a3 3 0 0 0 6 0L5 7ZM19 7l-3 6a3 3 0 0 0 6 0l-3-6Z"/>',
+  photo:'<path d="M4 8h3l1.5-2h7L17 8h3v11H4Z"/><circle cx="12" cy="13" r="3"/>',
+  pet:'<circle cx="7" cy="8" r="1.5"/><circle cx="11" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="18" cy="9" r="1.5"/><path d="M12 12c-3 0-5.5 2-5.5 4.5S8.5 20 12 20s5.5-1.5 5.5-3.5S15 12 12 12Z"/>',
+  driving:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.3"/><path d="M12 4v5M12 15v5M4 12h5M15 12h5"/>'
+};
+const CATS = [
+  {id:'restaurant',label:'מסעדות'},{id:'cafe',label:'בתי קפה'},{id:'bakery',label:'מאפיות'},
+  {id:'barber',label:'מספרות'},{id:'beauty',label:'מכוני יופי'},{id:'dentist',label:'רופאי שיניים'},
+  {id:'gym',label:'חדרי כושר'},{id:'garage',label:'מוסכים'},{id:'flower',label:'חנויות פרחים'},
+  {id:'lawyer',label:'עורכי דין'},{id:'photo',label:'סטודיו צילום'},{id:'pet',label:'חנויות חיות מחמד'},
+  {id:'driving',label:'בתי ספר לנהיגה'}
+];
+const FAMILY = {restaurant:'food',cafe:'food',bakery:'food',barber:'care',beauty:'care',gym:'care',
+  dentist:'trust',lawyer:'trust',driving:'trust',garage:'craft',flower:'craft',photo:'craft',pet:'craft'};
+const COPY = {
+  restaurant:{tag:'אוכל אמיתי, חוויה אמיתית',services:['תפריט טרי ומתחלף','ישיבה פנימית וחיצונית','מתאים לאירועים פרטיים']},
+  cafe:{tag:'הפסקת קפה שהופכת ליום טוב',services:['קפה טרי קלייה','מאפים ביתיים','פינת עבודה נעימה']},
+  bakery:{tag:'אפייה טרייה כל בוקר',services:['לחמים ומאפים יומיים','עוגות לאירועים','הזמנות מראש']},
+  barber:{tag:'תספורת שמדברת בשמך',services:['תספורת גברים מדויקת','עיצוב זקן','טיפוח מקצועי']},
+  beauty:{tag:'יופי שמתחיל בטיפול הנכון',services:['טיפולי פנים','מניקור־פדיקור','עיצוב גבות']},
+  gym:{tag:'האימון שישנה לך את היום',services:['ציוד מתקדם','מאמנים אישיים','שיעורים קבוצתיים']},
+  dentist:{tag:'חיוך בריא, בלי פחד',services:['בדיקות וניקוי אבנית','טיפולי שורש ושתלים','זמינות למקרי חירום']},
+  lawyer:{tag:'ליווי משפטי אישי ומקצועי',services:['ליווי בעסקאות נדל"ן','דיני משפחה','ייעוץ וייצוג משפטי']},
+  driving:{tag:'הדרך שלך לרישיון נהיגה',services:['שיעורים פרטניים','ליווי עד המבחן','סבלנות ומקצועיות']},
+  garage:{tag:'הרכב שלך בידיים טובות',services:['אבחון ותיקון תקלות','טסט וטיפולים תקופתיים','חלפים מקוריים']},
+  flower:{tag:'זרים שמספרים סיפור',services:['משלוחים באותו יום','זרים לאירועים','עיצוב אישי לפי בקשה']},
+  photo:{tag:'רגעים שנשארים לתמיד',services:['צילומי משפחה ואירועים','סטודיו מאובזר','עריכה מקצועית']},
+  pet:{tag:'כל מה שהחיה שלך צריכה',services:['מזון ואביזרים איכותיים','ייעוץ מקצועי','משלוחים מהירים']}
+};
+const FAMILY_STYLE = {
+  food:{bg:'#FBF3E7',text:'#2B1B12',accent:'#C1502E',soft:'#F0E2CE',font:'Georgia, "Times New Roman", serif'},
+  care:{bg:'#111116',text:'#F1EFE9',accent:'#D4A24E',soft:'#1d1e24',font:"'Rubik', sans-serif"},
+  trust:{bg:'#FFFFFF',text:'#16324F',accent:'#2E86AB',soft:'#EAF3F8',font:"'Heebo', sans-serif"},
+  craft:{bg:'#F3F7F1',text:'#24352B',accent:'#E76F51',soft:'#E6EFE4',font:"'Heebo', sans-serif"}
+};
+const STATUS_LABEL = {gold:'אין אתר',green:'אתר טוב',red:'אתר חלש'};
+const HOURS_BY_CAT = {
+  restaurant:"א׳–ה׳ 12:00–23:00 · ו׳ 12:00–15:30 · מוצ״ש לפי עונה",
+  cafe:"א׳–ה׳ 7:00–20:00 · ו׳ 7:00–15:00",
+  bakery:"א׳–ה׳ 6:30–19:00 · ו׳ 6:30–14:30",
+  barber:"א׳–ה׳ 9:00–19:00 · ו׳ 9:00–14:00 · בתיאום מראש",
+  beauty:"א׳–ה׳ 9:00–19:00 · ו׳ 9:00–14:00 · בתיאום מראש",
+  gym:"א׳–ה׳ 6:00–23:00 · ו׳ 7:00–17:00 · שבת 9:00–14:00",
+  dentist:"א׳–ה׳ 9:00–19:00 · ו׳ 9:00–13:00 · זמינות לחירום",
+  garage:"א׳–ה׳ 8:00–17:00 · ו׳ 8:00–13:00",
+  flower:"א׳–ה׳ 8:00–19:00 · ו׳ 8:00–15:00",
+  lawyer:"א׳–ה׳ 9:00–18:00 · בתיאום פגישה",
+  photo:"א׳–ה׳ 9:00–19:00 · בתיאום מראש",
+  pet:"א׳–ה׳ 9:00–19:00 · ו׳ 9:00–14:30",
+  driving:"א׳–ש׳ 7:00–21:00 · גמיש לפי לו״ז תלמיד"
+};
+
+/* ---------- Data ---------- */
+const BUSINESSES = [
+// ===== NETANYA =====
+{name:"Fratelli",addr:"שדרות גיבורי ישראל 17, נתניה",lat:32.281253,lng:34.862075,cat:'restaurant',city:'netanya',rating:4.5,phone:'09-878-7690',status:'green'},
+{name:"Nishi",addr:"שדרות עובד בן עמי 113, נתניה",lat:32.305069,lng:34.843464,cat:'restaurant',city:'netanya',rating:4.6,phone:'09-878-8888',status:'green'},
+{name:"היקב",addr:"רחוב גד מכנס 6, נתניה",lat:32.329334,lng:34.849590,cat:'restaurant',city:'netanya',rating:4.5,phone:'09-862-2220',status:'red'},
+{name:"צ'אטוצ'אק",addr:"רחוב המלאכה 4, נתניה",lat:32.277301,lng:34.857545,cat:'restaurant',city:'netanya',rating:4.6,phone:'09-885-5599',status:'gold'},
+{name:"Bar Italia",addr:"שדרות עובד בן עמי 113, נתניה",lat:32.304991,lng:34.843495,cat:'restaurant',city:'netanya',rating:4.5,phone:'09-742-1113',status:'green'},
+{name:"Mojo Asian Foodbar",addr:"שדרות גיבורי ישראל 17, נתניה",lat:32.281053,lng:34.862358,cat:'restaurant',city:'netanya',rating:4.3,phone:'09-885-0716',status:'red'},
+{name:"The View",addr:"רחוב גד מכנס 6, נתניה",lat:32.329637,lng:34.849842,cat:'restaurant',city:'netanya',rating:4.4,phone:'09-740-4477',status:'gold'},
+{name:"הסקוצמן",addr:"כיכר העצמאות 13, נתניה",lat:32.330270,lng:34.852189,cat:'restaurant',city:'netanya',rating:4.2,phone:'09-862-4546',status:'gold'},
+
+{name:"Caramel",addr:"שדרות גיבורי ישראל 7, נתניה",lat:32.277984,lng:34.860626,cat:'cafe',city:'netanya',rating:4.0,phone:'09-885-9996',status:'green'},
+{name:"ברדו סנטר",addr:"רחוב שטמפפר 6, נתניה",lat:32.328541,lng:34.854572,cat:'cafe',city:'netanya',rating:4.2,phone:'09-884-4714',status:'red'},
+{name:"Perugino",addr:"רחוב דיזנגוף 30, נתניה",lat:32.329254,lng:34.852916,cat:'cafe',city:'netanya',rating:3.8,phone:'050-484-2112',status:'green'},
+{name:"בית קפה בנתניה",addr:"רחוב יהושע שטמפפר 6, נתניה",lat:32.328723,lng:34.854811,cat:'cafe',city:'netanya',rating:4.2,phone:'',status:'gold'},
+{name:"קפה שטמפפר",addr:"רחוב יהושע שטמפפר 6, נתניה",lat:32.328388,lng:34.854721,cat:'cafe',city:'netanya',rating:4.2,phone:'',status:'gold'},
+{name:"אופרה בית קפה פטיסרי",addr:"רחוב מאפי 5, נתניה",lat:32.274735,lng:34.861617,cat:'cafe',city:'netanya',rating:4.2,phone:'09-766-3696',status:'gold'},
+
+{name:"Bread Bakers",addr:"רחוב החינוך העברי 4, נתניה",lat:32.307494,lng:34.877831,cat:'bakery',city:'netanya',rating:4.6,phone:'09-884-0888',status:'green'},
+{name:"Vicky's Bake Shop",addr:"רחוב האומנות 16, נתניה",lat:32.277477,lng:34.862573,cat:'bakery',city:'netanya',rating:4.6,phone:'09-793-2373',status:'gold'},
+{name:"JORNO Bakery",addr:"מלון West Lagoon, נתניה",lat:32.304924,lng:34.843595,cat:'bakery',city:'netanya',rating:4.2,phone:'03-730-8900',status:'green'},
+{name:"קפולסקי נתניה",addr:"רחוב המלאכה 30, נתניה",lat:32.283344,lng:34.860062,cat:'bakery',city:'netanya',rating:4.4,phone:'054-653-1918',status:'red'},
+{name:"דני בית מאפה",addr:"שדרות טום לנטוס 10, נתניה",lat:32.310291,lng:34.869671,cat:'bakery',city:'netanya',rating:4.3,phone:'09-955-6133',status:'gold'},
+
+{name:"Barber Home",addr:"רחוב רותם 154, נתניה",lat:32.285969,lng:34.851501,cat:'barber',city:'netanya',rating:5.0,phone:'053-241-4894',status:'green'},
+{name:"Head Chopped",addr:"רחוב בארי 68, נתניה",lat:32.340134,lng:34.861378,cat:'barber',city:'netanya',rating:5.0,phone:'054-311-7230',status:'gold'},
+{name:"CLV מספרת גברים",addr:"שדרות טום לנטוס 8, נתניה",lat:32.311568,lng:34.869795,cat:'barber',city:'netanya',rating:5.0,phone:'053-735-3537',status:'gold'},
+{name:"Alex Scissors",addr:"רחוב הנוטע 10, נתניה",lat:32.327134,lng:34.856067,cat:'barber',city:'netanya',rating:4.9,phone:'054-332-0377',status:'red'},
+{name:"Hair Star Barber",addr:"רחוב הכלירי 6, נתניה",lat:32.314854,lng:34.860016,cat:'barber',city:'netanya',rating:5.0,phone:'054-735-7398',status:'gold'},
+{name:"מוטי צביגי",addr:"רחוב הרב רפאל אנקווה 17, נתניה",lat:32.285679,lng:34.855183,cat:'barber',city:'netanya',rating:4.8,phone:'09-835-9893',status:'green'},
+
+{name:"דנה חן קליניקה",addr:"רחוב יהושע שטמפפר 15, נתניה",lat:32.328142,lng:34.854458,cat:'beauty',city:'netanya',rating:4.9,phone:'09-887-3390',status:'green'},
+{name:"טניה בקאי קוסמטיקה",addr:"שדרות האגמים 11, נתניה",lat:32.289501,lng:34.849971,cat:'beauty',city:'netanya',rating:4.9,phone:'054-682-4499',status:'gold'},
+{name:"HBeauty חדוה בכר",addr:"רחוב ד\"ר יהודה פרח 10, נתניה",lat:32.302993,lng:34.871943,cat:'beauty',city:'netanya',rating:5.0,phone:'052-324-4222',status:'gold'},
+{name:"קליניקת הילסקין",addr:"שדרות גיבורי ישראל 13, נתניה",lat:32.279919,lng:34.861270,cat:'beauty',city:'netanya',rating:5.0,phone:'077-938-6331',status:'green'},
+{name:"Lisa Beauty Boutique",addr:"רחוב יהודה הלוי 25, נתניה",lat:32.321723,lng:34.857141,cat:'beauty',city:'netanya',rating:5.0,phone:'050-613-6299',status:'red'},
+
+{name:"Das Dent SOS",addr:"רחוב סמילנסקי 4, נתניה",lat:32.328239,lng:34.855961,cat:'dentist',city:'netanya',rating:4.9,phone:'050-988-2882',status:'gold'},
+{name:"עיר ימים מרפאת סנטר",addr:"בני ברמן 2, נתניה",lat:32.279157,lng:34.847068,cat:'dentist',city:'netanya',rating:4.8,phone:'09-790-0291',status:'green'},
+{name:'ד"ר רועי עמיקם',addr:"רחוב קרל פופר 7, נתניה",lat:32.290724,lng:34.855028,cat:'dentist',city:'netanya',rating:5.0,phone:'053-285-4044',status:'gold'},
+{name:'ד"ר אילן גלבוע',addr:"רחוב אוסישקין 26, נתניה",lat:32.327155,lng:34.851252,cat:'dentist',city:'netanya',rating:4.7,phone:'09-832-3021',status:'green'},
+{name:'ד"ר ליאור סעידיאן',addr:"רחוב הרצל 53, נתניה",lat:32.327407,lng:34.861262,cat:'dentist',city:'netanya',rating:5.0,phone:'09-973-1348',status:'red'},
+
+{name:"Holmes Place Netanya",addr:"קניון השרון, נתניה",lat:32.325416,lng:34.861325,cat:'gym',city:'netanya',rating:4.0,phone:'09-862-4445',status:'green'},
+{name:"Swift Poleg",addr:"רחוב בני ברמן 2, נתניה",lat:32.279157,lng:34.847068,cat:'gym',city:'netanya',rating:4.0,phone:'09-865-7671',status:'gold'},
+{name:"איקון פיטנס נתניה",addr:"שדרות טום לנטוס 59, נתניה",lat:32.295696,lng:34.868801,cat:'gym',city:'netanya',rating:3.8,phone:'',status:'red'},
+{name:"Greenbody",addr:"שדרות טום לנטוס 10, נתניה",lat:32.310291,lng:34.869671,cat:'gym',city:'netanya',rating:5.0,phone:'053-203-0490',status:'green'},
+{name:"Reborn",addr:"שדרות עובד בן עמי 2, נתניה",lat:32.317801,lng:34.846544,cat:'gym',city:'netanya',rating:3.5,phone:'077-764-5400',status:'gold'},
+
+{name:"מוסך ארצי מוטורס",addr:"רחוב הקדר 38, נתניה",lat:32.322119,lng:34.880627,cat:'garage',city:'netanya',rating:4.9,phone:'09-748-4717',status:'gold'},
+{name:"מוסך אלמוג",addr:"רחוב שכטרמן צבי 13, נתניה",lat:32.320393,lng:34.875660,cat:'garage',city:'netanya',rating:4.9,phone:'09-861-7666',status:'green'},
+{name:"מוסכי ארז",addr:"רחוב התרופה 5, נתניה",lat:32.282824,lng:34.860999,cat:'garage',city:'netanya',rating:4.8,phone:'09-885-8338',status:'red'},
+{name:"Netanya Car Garages",addr:"רחוב דוד פינקס 28, נתניה",lat:32.317615,lng:34.873813,cat:'garage',city:'netanya',rating:4.4,phone:'09-860-0600',status:'green'},
+{name:"מוסך וי אס קאר",addr:"רחוב יד חרוצים 6, נתניה",lat:32.278554,lng:34.862593,cat:'garage',city:'netanya',rating:5.0,phone:'050-876-6558',status:'gold'},
+
+{name:"Orens Flowers",addr:"שדרות בנימין 12, נתניה",lat:32.326589,lng:34.857471,cat:'flower',city:'netanya',rating:4.6,phone:'053-878-0201',status:'gold'},
+{name:"פרחים ועוד",addr:"רחוב המלאכה 22, נתניה",lat:32.281460,lng:34.859371,cat:'flower',city:'netanya',rating:4.6,phone:'09-835-5188',status:'red'},
+{name:"Mazi Flowers",addr:"רחוב הרצל 49, נתניה",lat:32.327588,lng:34.860638,cat:'flower',city:'netanya',rating:4.1,phone:'09-862-6362',status:'green'},
+{name:"פרחי דנה נתניה",addr:"שדרות חיים ויצמן 16, נתניה",lat:32.330458,lng:34.859214,cat:'flower',city:'netanya',rating:4.9,phone:'09-834-8232',status:'gold'},
+{name:"Jul's Flowers",addr:"רחוב המייסדים 73, אבן יהודה",lat:32.269387,lng:34.886105,cat:'flower',city:'netanya',rating:4.9,phone:'054-952-4536',status:'green'},
+
+{name:"Spring, Sobiib & Co",addr:"פרנץ אופנהיימר 4, נתניה",lat:32.313768,lng:34.874623,cat:'lawyer',city:'netanya',rating:4.9,phone:'09-891-4684',status:'green'},
+{name:"עו\"ד שרון סגל",addr:"רחוב מפי 5, נתניה",lat:32.274979,lng:34.861281,cat:'lawyer',city:'netanya',rating:4.9,phone:'09-373-2000',status:'gold'},
+{name:"דין סיני, עורך דין",addr:"מפ\"י 5, מגדל Soho, נתניה",lat:32.275029,lng:34.861588,cat:'lawyer',city:'netanya',rating:5.0,phone:'052-444-8452',status:'green'},
+{name:'משרד עו"ד אורטל ושות\'',addr:"שדרות חיים ויצמן 24, נתניה",lat:32.331192,lng:34.859300,cat:'lawyer',city:'netanya',rating:5.0,phone:'09-833-9133',status:'red'},
+{name:"Avi Hayat Law Firm",addr:"שדרות גיבורי ישראל 12, נתניה",lat:32.277667,lng:34.859742,cat:'lawyer',city:'netanya',rating:5.0,phone:'072-215-0155',status:'gold'},
+
+{name:"סטודיו ליאורית",addr:"רחוב חיים לסקוב 68, נתניה",lat:32.272643,lng:34.845914,cat:'photo',city:'netanya',rating:4.9,phone:'054-768-3389',status:'gold'},
+{name:"Rinton",addr:"שדרות חיים ויצמן 4, נתניה",lat:32.328476,lng:34.858818,cat:'photo',city:'netanya',rating:4.7,phone:'052-265-1001',status:'green'},
+{name:"Elena Sosnovskaya Photo",addr:"רחוב פתח תקווה, נתניה",lat:32.318579,lng:34.858244,cat:'photo',city:'netanya',rating:5.0,phone:'053-830-9844',status:'gold'},
+{name:"קסם דיגיטל",addr:"רחוב גיבורי ישראל 5א, נתניה",lat:32.276472,lng:34.861366,cat:'photo',city:'netanya',rating:4.6,phone:'09-865-2880',status:'red'},
+{name:"צלמת טלי ליפשיץ",addr:"רחוב אירוס הארגמן 80, נתניה",lat:32.286455,lng:34.847372,cat:'photo',city:'netanya',rating:5.0,phone:'054-474-7330',status:'green'},
+
+{name:"הג'ונגלה חנות חיות",addr:"שדרות חיים ויצמן 15, נתניה",lat:32.330181,lng:34.858551,cat:'pet',city:'netanya',rating:4.3,phone:'09-833-0016',status:'gold'},
+{name:"Pet Park",addr:"רחוב אלון צבי 13, נתניה",lat:32.326332,lng:34.859940,cat:'pet',city:'netanya',rating:4.8,phone:'09-887-7794',status:'green'},
+{name:"Zu Eretz Zoo",addr:"שדרות טום לנטוס 26, נתניה",lat:32.306912,lng:34.869090,cat:'pet',city:'netanya',rating:4.5,phone:'09-885-1992',status:'gold'},
+{name:"Pet Supermarket",addr:"רחוב האומנות 2, נתניה",lat:32.278376,lng:34.858849,cat:'pet',city:'netanya',rating:4.2,phone:'09-835-8030',status:'red'},
+{name:'אקונה מטטה - חנות חיות',addr:"שדרות חיים ויצמן 24, נתניה",lat:32.331069,lng:34.859207,cat:'pet',city:'netanya',rating:4.9,phone:'077-207-3001',status:'green'},
+
+{name:'בית ספר לנהיגה "אוריאל"',addr:"שדרות גיבורי ישראל 5, נתניה",lat:32.277206,lng:34.861016,cat:'driving',city:'netanya',rating:5.0,phone:'050-490-9072',status:'gold'},
+{name:"בית ספר לנהיגה מור",addr:"שדרות טום לנטוס 13, נתניה",lat:32.309555,lng:34.870090,cat:'driving',city:'netanya',rating:4.9,phone:'072-397-1823',status:'green'},
+{name:"אלירן הלפמן - מורה נהיגה",addr:"רחוב קרל פופר, נתניה",lat:32.290947,lng:34.856632,cat:'driving',city:'netanya',rating:4.9,phone:'050-659-8597',status:'gold'},
+{name:"אלי ברדוגו - מורה נהיגה",addr:"שדרות גיבורי ישראל 5, נתניה",lat:32.275469,lng:34.860004,cat:'driving',city:'netanya',rating:5.0,phone:'050-474-7007',status:'green'},
+{name:"אמיר בוחניק - מורה נהיגה",addr:"רחוב הנופר, נתניה",lat:32.301471,lng:34.876606,cat:'driving',city:'netanya',rating:5.0,phone:'050-359-9690',status:'red'},
+
+// ===== TEL AVIV =====
+{name:"Cicchetti",addr:"רחוב יהודה הלוי 58, תל אביב",lat:32.065642,lng:34.778574,cat:'restaurant',city:'telaviv',rating:4.5,phone:'03-685-3499',status:'gold'},
+{name:"Yaffo Tel Aviv",addr:"יגאל אלון 98, תל אביב",lat:32.070014,lng:34.794095,cat:'restaurant',city:'telaviv',rating:4.3,phone:'03-624-9249',status:'green'},
+{name:"Amore Mio",addr:"אבן גבירול 100, תל אביב",lat:32.083469,lng:34.781647,cat:'restaurant',city:'telaviv',rating:4.5,phone:'03-524-4040',status:'green'},
+{name:"Mashya",addr:"מנדלי מוכר ספרים 5, תל אביב",lat:32.079260,lng:34.768714,cat:'restaurant',city:'telaviv',rating:4.4,phone:'03-750-0999',status:'red'},
+
+{name:"Café Shneor",addr:"פינסקר 20, תל אביב",lat:32.074511,lng:34.770480,cat:'cafe',city:'telaviv',rating:4.5,phone:'03-629-6519',status:'green'},
+{name:"Café CUCU",addr:"דיזנגוף 83, תל אביב",lat:32.077165,lng:34.774262,cat:'cafe',city:'telaviv',rating:4.5,phone:'03-734-6940',status:'red'},
+{name:"איזי קפה ארלוזורוב",addr:"ארלוזורוב 76, תל אביב",lat:32.085826,lng:34.778890,cat:'cafe',city:'telaviv',rating:4.5,phone:'03-924-4100',status:'gold'},
+{name:"Cafelix Shlomo Hamelech",addr:"שלמה המלך 12, תל אביב",lat:32.077467,lng:34.776731,cat:'cafe',city:'telaviv',rating:4.6,phone:'03-525-0388',status:'green'},
+
+{name:"The Barber",addr:"הברזל 21, תל אביב",lat:32.109043,lng:34.839026,cat:'barber',city:'telaviv',rating:4.9,phone:'054-818-1959',status:'gold'},
+{name:"Studio Hafif",addr:"דיזנגוף, תל אביב",lat:32.075549,lng:34.774224,cat:'barber',city:'telaviv',rating:5.0,phone:'03-685-8282',status:'green'},
+{name:"Cut & Shave",addr:"דיזנגוף 229, תל אביב",lat:32.090721,lng:34.775743,cat:'barber',city:'telaviv',rating:4.8,phone:'03-537-5553',status:'red'},
+{name:"Mentor Barber Shop",addr:"בן יהודה 46, תל אביב",lat:32.077681,lng:34.768638,cat:'barber',city:'telaviv',rating:4.9,phone:'03-741-7171',status:'green'},
+
+// ===== HAIFA =====
+{name:"VIVINO",addr:"כיכר אליזבט 1, חיפה",lat:32.786720,lng:34.998908,cat:'restaurant',city:'haifa',rating:4.6,phone:'04-822-9454',status:'green'},
+{name:"LUX",addr:"הנמל 13, חיפה",lat:32.817717,lng:35.001863,cat:'restaurant',city:'haifa',rating:4.6,phone:'077-206-0970',status:'gold'},
+{name:"Eataliano Dalla Costa",addr:"העלייה השנייה 96, חיפה",lat:32.831391,lng:34.970492,cat:'restaurant',city:'haifa',rating:4.5,phone:'04-660-1011',status:'green'},
+{name:"CRUDO",addr:"הנמל 15, חיפה",lat:32.817790,lng:35.001735,cat:'restaurant',city:'haifa',rating:4.6,phone:'077-499-0499',status:'red'},
+
+{name:"ButterFly Caffee",addr:"הנמל 25, חיפה",lat:32.818371,lng:35.001008,cat:'cafe',city:'haifa',rating:4.6,phone:'04-998-0599',status:'gold'},
+{name:"Silva",addr:"שדרות מוריה 120, חיפה",lat:32.788728,lng:34.986493,cat:'cafe',city:'haifa',rating:4.3,phone:'04-811-4442',status:'green'},
+{name:"Tsafon Roasters",addr:"הנביאים 17, חיפה",lat:32.813180,lng:34.995722,cat:'cafe',city:'haifa',rating:4.6,phone:'053-282-9633',status:'gold'},
+{name:"Dekel Café",addr:"נורדאו 26, חיפה",lat:32.808224,lng:34.999387,cat:'cafe',city:'haifa',rating:4.8,phone:'',status:'green'},
+
+{name:"Chechi's Barbershop",addr:"שדרות הנשיא 124, חיפה",lat:32.804504,lng:34.987225,cat:'barber',city:'haifa',rating:4.9,phone:'077-482-1367',status:'gold'},
+{name:"Ehud Elbaz Salon",addr:"חנה סנש 45, חיפה",lat:32.800345,lng:34.999585,cat:'barber',city:'haifa',rating:4.9,phone:'052-269-9630',status:'green'},
+{name:"Barberia",addr:"הנמל 3, חיפה",lat:32.817377,lng:35.002537,cat:'barber',city:'haifa',rating:4.7,phone:'050-774-4286',status:'red'},
+{name:"Ringo's Classic Barbershop",addr:"שרה 12, חיפה",lat:32.820106,lng:34.996150,cat:'barber',city:'haifa',rating:4.9,phone:'054-301-5202',status:'gold'},
+];
+
+const CENTER = [32.305, 34.855];
+let scope = 'netanya';
+let activeCat = null;
+let selected = null;
+
+/* ---------- Pills ---------- */
+const pillsEl = document.getElementById('pills');
+function renderPills(){
+  pillsEl.innerHTML = `<div class="pill ${activeCat===null?'active':''}" data-cat="">הכל</div>` + CATS.map(c=>`
+    <div class="pill ${activeCat===c.id?'active':''}" data-cat="${c.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[c.id]}</svg>
+      ${c.label}
+    </div>`).join('');
+  pillsEl.querySelectorAll('.pill').forEach(p=>p.addEventListener('click',()=>{
+    activeCat = p.dataset.cat || null;
+    renderPills(); renderAll(true);
+  }));
+}
+document.querySelectorAll('#locScope button').forEach(b=>b.addEventListener('click',()=>{
+  scope = b.dataset.scope;
+  document.querySelectorAll('#locScope button').forEach(x=>x.classList.toggle('active',x===b));
+  renderAll(true);
+}));
+
+document.querySelectorAll('#viewTabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#viewTabs button').forEach(x=>x.classList.toggle('active',x===b));
+  const v = b.dataset.view;
+  document.getElementById('mapView').style.display = v==='map' ? 'flex' : 'none';
+  document.getElementById('crmView').style.display = v==='crm' ? 'flex' : 'none';
+  if(v==='map') setTimeout(()=>map.invalidateSize(),50);
+  if(v==='crm') renderCRM();
+}));
+
+/* ---------- Map ---------- */
+const map = L.map('map',{zoomControl:true,attributionControl:false}).setView(CENTER, 13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
+
+const markers = BUSINESSES.map((b,i)=>{
+  const icon = L.divIcon({className:'',html:`<div class="pin ${b.status}"><div class="pin-ring"></div><div class="pin-core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ICONS[b.cat]}</svg></div></div>`,iconSize:[36,36],iconAnchor:[18,18]});
+  const m = L.marker([b.lat,b.lng],{icon}).addTo(map);
+  m.bindPopup(`<div class="popup-name">${b.name}</div><div class="popup-status" style="color:${b.status==='gold'?'var(--gold)':b.status==='green'?'var(--green)':'var(--red)'}">${STATUS_LABEL[b.status]}</div>`);
+  m.on('click',()=>selectBusiness(i));
+  return m;
+});
+
+function distanceKm(lat,lng){
+  const R=6371,dLat=(lat-CENTER[0])*Math.PI/180,dLng=(lng-CENTER[1])*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(CENTER[0]*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1);
+}
+
+function visibleList(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  return BUSINESSES.map((b,i)=>({...b,idx:i})).filter(b=>
+    (scope==='netanya' ? b.city==='netanya' : true) &&
+    (!activeCat||b.cat===activeCat) &&
+    (!q || (b.name+b.addr).toLowerCase().includes(q))
+  );
+}
+
+const listEl = document.getElementById('list');
+function renderAll(refit){
+  const filtered = visibleList();
+  document.getElementById('sum-gold').textContent = document.getElementById('cnt-gold').textContent = filtered.filter(b=>b.status==='gold').length;
+  document.getElementById('sum-green').textContent = document.getElementById('cnt-green').textContent = filtered.filter(b=>b.status==='green').length;
+  document.getElementById('sum-red').textContent = document.getElementById('cnt-red').textContent = filtered.filter(b=>b.status==='red').length;
+
+  listEl.innerHTML = filtered.map(b=>`
+    <div class="card status-${b.status} ${selected===b.idx?'selected':''}" data-idx="${b.idx}">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[b.cat]}</svg></div>
+      <div class="card-body">
+        <div class="card-name">${b.name}</div>
+        <div class="card-addr">${scope==='all'?`<span class="city-tag">${b.city==='netanya'?'נתניה':b.city==='telaviv'?'ת״א':'חיפה'}</span>`:''}${b.addr}</div>
+        <div class="card-meta">
+          <span class="status-tag">${STATUS_LABEL[b.status]}</span>
+          <span class="rating">★ ${b.rating}</span>
+          <span class="dist">${distanceKm(b.lat,b.lng)} ק"מ</span>
+        </div>
+      </div>
+      <button class="addcrm" data-idx="${b.idx}" title="הוסף למעקב פניות" style="align-self:flex-start;background:var(--surface2);border:1px solid var(--line);color:var(--muted);width:28px;height:28px;border-radius:8px;cursor:pointer;flex-shrink:0">➕</button>
+    </div>`).join('') || `<div style="text-align:center;color:var(--muted);padding:30px 10px;font-size:13px">לא נמצאו עסקים תואמים</div>`;
+
+  listEl.querySelectorAll('.card').forEach(c=>c.addEventListener('click',()=>selectBusiness(+c.dataset.idx)));
+  listEl.querySelectorAll('.addcrm').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    addToCRM(BUSINESSES[+btn.dataset.idx]);
+    btn.textContent='✓'; btn.style.color='var(--green)';
+  }));
+
+  const visibleIdx = new Set(filtered.map(b=>b.idx));
+  markers.forEach((m,i)=>{ const el=m.getElement(); if(el) el.style.display = visibleIdx.has(i)?'':'none'; });
+
+  if(refit){
+    if(filtered.length){
+      const bounds = L.latLngBounds(filtered.map(b=>[b.lat,b.lng]));
+      map.fitBounds(bounds,{padding:[60,60],maxZoom:14});
+    } else {
+      map.setView(CENTER,13);
+    }
+  }
+}
+
+function selectBusiness(i){
+  selected = i;
+  const b = BUSINESSES[i];
+  map.flyTo([b.lat,b.lng], 15, {duration:0.6});
+  markers[i].openPopup();
+  document.getElementById('cta').disabled = false;
+  document.getElementById('cta').textContent = `🪄 צור אתר AI ל-${b.name}`;
+  renderAll(false);
+}
+
+document.getElementById('searchInput').addEventListener('input', ()=>renderAll(false));
+document.getElementById('cta').addEventListener('click', ()=>{ if(selected!==null) openGenerator(BUSINESSES[selected]); });
+
+renderPills();
+renderAll(true);
+
+/* ---------- AI Site Generator ---------- */
+const modalBackdrop = document.getElementById('modalBackdrop');
+const genWrap = document.getElementById('genWrap');
+const genTitle = document.getElementById('genTitle');
+const genSteps = document.getElementById('genSteps');
+const browserEl = document.getElementById('browser');
+const browserUrl = document.getElementById('browserUrl');
+const browserFrame = document.getElementById('browserFrame');
+const modalTitle = document.getElementById('modalTitle');
+
+const STEPS = ['סורק פרטי עסק ברשת...','שולף כתובת, טלפון ודירוג אמיתיים...','מנתח את תחום הפעילות...','בוחר שפת עיצוב מתאימה...','כותב תוכן מותאם אישית...','בונה עמוד נחיתה...'];
+
+function slug(name){ return name.replace(/["'׳״]/g,'').replace(/[^\w\u0590-\u05FF]+/g,'-').toLowerCase().replace(/^-+|-+$/g,'') || 'business'; }
+
+function openGenerator(b){
+  modalBackdrop.classList.add('open');
+  browserEl.classList.remove('show');
+  genWrap.style.display = 'flex';
+  document.getElementById('modalAddCrm').textContent = '➕ הוסף למעקב';
+  modalTitle.textContent = `🪄 בונה אתר ל-${b.name}`;
+  genTitle.textContent = `אוסף מידע אמיתי על ${b.name}...`;
+  genSteps.innerHTML = STEPS.map((s,i)=>`<div class="gen-step" id="gstep${i}"><div class="gen-check"></div><span>${s}</span></div>`).join('');
+
+  STEPS.forEach((_,i)=>{
+    setTimeout(()=>{
+      const prev = document.getElementById(`gstep${i-1}`);
+      if(prev){ prev.classList.remove('active'); prev.classList.add('done'); prev.querySelector('.gen-check').textContent='✓'; }
+      const cur = document.getElementById(`gstep${i}`);
+      if(cur) cur.classList.add('active');
+      if(i===STEPS.length-1){
+        setTimeout(()=>{
+          cur.classList.remove('active'); cur.classList.add('done'); cur.querySelector('.gen-check').textContent='✓';
+          genWrap.style.display='none';
+          browserUrl.textContent = `https://${slug(b.name)}.co.il`;
+          browserFrame.innerHTML = buildSite(b);
+          attachSiteInteractions(browserFrame);
+          browserEl.classList.add('show');
+        }, 550);
+      }
+    }, i*480);
+  });
+}
+document.getElementById('modalClose').addEventListener('click', ()=>modalBackdrop.classList.remove('open'));
+modalBackdrop.addEventListener('click', e=>{ if(e.target===modalBackdrop) modalBackdrop.classList.remove('open'); });
+
+function buildSite(b){
+  const fam = FAMILY[b.cat];
+  const s = FAMILY_STYLE[fam];
+  const copy = COPY[b.cat];
+  const hours = HOURS_BY_CAT[b.cat] || 'לשעות פעילות מדויקות — התקשרו אלינו';
+  const onDark = fam==='care';
+  const btnText = onDark ? '#100c04' : '#fff';
+  const full = Math.round(b.rating);
+  const stars = Array.from({length:5},(_,i)=>`<span style="color:${i<full?s.accent:'rgba(255,255,255,0.25)'};font-size:13px">★</span>`).join('');
+  const heroTiltId = 'tilt-'+Math.random().toString(36).slice(2,8);
+  return `
+  <div dir="rtl" style="font-family:${s.font};background:${s.bg};color:${s.text};min-height:100%">
+
+    <section style="position:relative;min-height:520px;background:#07080a;color:#fff;overflow:hidden;display:flex;flex-direction:column">
+      <canvas id="${heroTiltId}" data-accent="${s.accent}" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      <header style="position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:26px 6%">
+        <div style="font-weight:700;font-size:13px;letter-spacing:.15em;opacity:.85">${b.name.toUpperCase()}</div>
+        <a href="tel:${b.phone||''}" style="border:1px solid rgba(255,255,255,0.35);color:#fff;padding:9px 18px;border-radius:100px;text-decoration:none;font-weight:600;font-size:12px;white-space:nowrap;backdrop-filter:blur(6px)">📞 יצירת קשר</a>
+      </header>
+      <div style="position:relative;z-index:2;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:20px 6% 60px">
+        <div style="font-size:11px;letter-spacing:.2em;color:${s.accent};font-weight:700;margin-bottom:22px;text-transform:uppercase">📍 ${b.addr}</div>
+        <h1 style="font-size:clamp(38px,7vw,78px);margin:0 0 20px;line-height:1.02;font-weight:800;letter-spacing:-0.02em;max-width:820px">${copy.tag}</h1>
+        <p style="font-size:15px;opacity:.6;max-width:440px;margin:0 auto 30px;font-weight:300">${b.name} — שירות אמין ומקצועי, בלב האזור.</p>
+        <a href="tel:${b.phone||''}" style="display:inline-block;background:${s.accent};color:${btnText};padding:16px 38px;border-radius:100px;text-decoration:none;font-weight:800;font-size:14px;box-shadow:0 16px 40px ${s.accent}55">קבעו תור עכשיו</a>
+      </div>
+      <div style="position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:8px;padding-bottom:20px;opacity:.5;font-size:11px">
+        ${stars}<span style="font-weight:700">${b.rating}</span><span>· ביקורות אמיתיות בגוגל</span>
+      </div>
+    </section>
+
+    <section class="reveal" style="padding:34px 6%;display:flex;flex-wrap:wrap;gap:14px;justify-content:center;border-bottom:1px solid ${s.soft}">
+      ${['שירות אישי ומקצועי','זמינות ומענה מהיר','לקוחות מרוצים וחוזרים','מיקום נוח ונגיש'].map(v=>`
+        <div style="display:flex;align-items:center;gap:8px;background:${s.soft};padding:10px 16px;border-radius:100px;font-size:12.5px;font-weight:600">
+          <span style="color:${s.accent}">✓</span>${v}
+        </div>`).join('')}
+    </section>
+
+    <section class="reveal" style="padding:54px 6% 20px">
+      <div style="font-size:11.5px;font-weight:700;letter-spacing:.1em;color:${s.accent};margin-bottom:8px">השירותים שלנו</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+        ${copy.services.map((sv,i)=>`
+          <div class="svc-card" style="background:${s.soft};border-radius:16px;padding:28px 18px;text-align:center;transition:transform .25s ease, box-shadow .25s ease;cursor:default">
+            <div style="width:46px;height:46px;border-radius:14px;background:${s.accent};margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:${btnText};font-weight:800;font-size:17px">${i+1}</div>
+            <div style="font-weight:700;font-size:14.5px;line-height:1.4">${sv}</div>
+          </div>`).join('')}
+      </div>
+    </section>
+
+    <section class="reveal" style="padding:50px 6%;display:grid;grid-template-columns:1.1fr 0.9fr;gap:28px;align-items:center">
+      <div>
+        <div style="font-size:11.5px;font-weight:700;letter-spacing:.1em;color:${s.accent};margin-bottom:10px">קצת עלינו</div>
+        <p style="font-size:15px;line-height:1.75;opacity:.85">${b.name} פועל/ת ב${b.addr.split(',').pop().trim()} ומעניק/ה שירות אישי ומקצועי לכל לקוח. הדירוג הגבוה (${b.rating}★ מתוך 5) משקף מחויבות לאיכות ולשירות אמיתי — לא רק מילים.</p>
+        <div style="display:flex;gap:22px;margin-top:22px;flex-wrap:wrap">
+          <div><div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:22px;color:${s.accent}">${b.rating}</div><div style="font-size:11.5px;opacity:.6">דירוג ממוצע</div></div>
+          <div><div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:22px;color:${s.accent}">${b.city==='netanya'?'נתניה':b.city==='telaviv'?'תל אביב':'חיפה'}</div><div style="font-size:11.5px;opacity:.6">איזור שירות</div></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="tilt-tile" style="grid-column:1/-1;height:90px;border-radius:14px;background:linear-gradient(135deg,${s.accent},${s.accent}88);transition:transform .3s"></div>
+        <div class="tilt-tile" style="height:70px;border-radius:14px;background:${s.soft};border:1px solid ${s.accent}33;transition:transform .3s"></div>
+        <div class="tilt-tile" style="height:70px;border-radius:14px;background:${s.soft};border:1px solid ${s.accent}33;transition:transform .3s"></div>
+      </div>
+    </section>
+
+    <section class="reveal" style="padding:50px 6%">
+      <div style="font-size:11.5px;font-weight:700;letter-spacing:.1em;color:${s.accent};margin-bottom:10px;text-align:center">יצירת קשר</div>
+      <h2 style="text-align:center;font-size:26px;margin:0 0 30px">נשמח לשמוע מכם</h2>
+      <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px">
+        <input placeholder="שם מלא" style="padding:13px 16px;border-radius:12px;border:1px solid ${s.accent}33;background:${s.soft};font-family:inherit;font-size:13.5px;color:${s.text}">
+        <input placeholder="טלפון" style="padding:13px 16px;border-radius:12px;border:1px solid ${s.accent}33;background:${s.soft};font-family:inherit;font-size:13.5px;color:${s.text}">
+        <textarea placeholder="הודעה" rows="3" style="padding:13px 16px;border-radius:12px;border:1px solid ${s.accent}33;background:${s.soft};font-family:inherit;font-size:13.5px;resize:none;color:${s.text}"></textarea>
+        <a href="tel:${b.phone||''}" style="text-align:center;background:${s.accent};color:${btnText};padding:13px;border-radius:12px;text-decoration:none;font-weight:800;font-size:14px">שליחה</a>
+      </div>
+    </section>
+
+    <section style="padding:36px 6%;background:${s.soft};display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;align-items:center;border-radius:20px 20px 0 0">
+      <div><div style="font-weight:700;font-size:13.5px;margin-bottom:4px">📍 כתובת</div><div style="opacity:.75;font-size:13px">${b.addr}</div></div>
+      <div><div style="font-weight:700;font-size:13.5px;margin-bottom:4px">📞 טלפון</div><div style="opacity:.75;font-size:13px">${b.phone||'צרו קשר דרך האתר'}</div></div>
+      <div><div style="font-weight:700;font-size:13.5px;margin-bottom:4px">🕒 שעות פעילות אופייניות</div><div style="opacity:.75;font-size:13px">${hours}</div></div>
+    </section>
+    <footer style="text-align:center;padding:20px;font-size:11px;opacity:.45">נוצר אוטומטית ב-BizSite AI · ${b.name} © 2026</footer>
+  </div>`;
+}
+
+function attachSiteInteractions(container){
+  // Active-Theory-style ambient canvas hero animation
+  const canvas = container.querySelector('canvas[id^="tilt-"]');
+  if(canvas){
+    const accent = canvas.dataset.accent;
+    const ctx = canvas.getContext('2d');
+    function resize(){ canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+    resize();
+    const orbs = Array.from({length:5},()=>({
+      x: Math.random()*canvas.width, y: Math.random()*canvas.height,
+      r: 90+Math.random()*140, vx:(Math.random()-0.5)*0.35, vy:(Math.random()-0.5)*0.35
+    }));
+    let raf;
+    function tick(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.filter = 'blur(50px)';
+      orbs.forEach(o=>{
+        o.x += o.vx; o.y += o.vy;
+        if(o.x<-o.r||o.x>canvas.width+o.r) o.vx*=-1;
+        if(o.y<-o.r||o.y>canvas.height+o.r) o.vy*=-1;
+        const g = ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
+        g.addColorStop(0, accent+'55'); g.addColorStop(1, accent+'00');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
+      });
+      raf = requestAnimationFrame(tick);
+    }
+    tick();
+    window.addEventListener('resize', resize);
+  }
+  container.querySelectorAll('.svc-card').forEach(card=>{
+    card.addEventListener('mouseenter', ()=>{ card.style.transform='translateY(-6px)'; card.style.boxShadow='0 16px 30px rgba(0,0,0,0.12)'; });
+    card.addEventListener('mouseleave', ()=>{ card.style.transform='none'; card.style.boxShadow='none'; });
+  });
+  container.querySelectorAll('.tilt-tile').forEach(tile=>{
+    tile.addEventListener('mousemove', e=>{
+      const r = tile.getBoundingClientRect();
+      const px = (e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
+      tile.style.transform = `perspective(400px) rotateX(${py*-10}deg) rotateY(${px*10}deg)`;
+    });
+    tile.addEventListener('mouseleave', ()=>{ tile.style.transform='none'; });
+  });
+  // scroll-reveal
+  const revealEls = container.querySelectorAll('.reveal');
+  if(revealEls.length){
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(en=>{ if(en.isIntersecting){ en.target.style.opacity='1'; en.target.style.transform='none'; } });
+    },{root:container, threshold:0.15});
+    revealEls.forEach(el=>{
+      el.style.opacity='0'; el.style.transform='translateY(24px)'; el.style.transition='opacity .6s ease, transform .6s ease';
+      io.observe(el);
+    });
+  }
+}
+
+/* ---------- CRM (מעקב פניות) — compatible with the standalone business_tracker.html localStorage schema ---------- */
+const CRM_KEY = 'business_tracker_v2';
+let crmContacts = JSON.parse(localStorage.getItem(CRM_KEY) || '[]');
+function saveCRM(){ localStorage.setItem(CRM_KEY, JSON.stringify(crmContacts)); }
+function normCRM(s){ return String(s||'').trim().toLowerCase().replace(/[״"'`]/g,'').replace(/\s+/g,' '); }
+function normPhone(s){ return String(s||'').replace(/[^0-9]/g,''); }
+function findDupeCRM(name,phone){
+  const n = normCRM(name), ph = normPhone(phone);
+  return crmContacts.find(c => (n && normCRM(c.name)===n) || (ph && ph.length>=7 && normPhone(c.phone)===ph));
+}
+function addToCRM(b){
+  if(findDupeCRM(b.name, b.phone)) return false;
+  const catLabel = (CATS.find(c=>c.id===b.cat)||{}).label || b.cat;
+  const cityLabel = b.city==='netanya'?'נתניה':b.city==='telaviv'?'תל אביב':'חיפה';
+  crmContacts.unshift({
+    id: Date.now()+Math.random(), name:b.name, phone:b.phone||'', city:cityLabel,
+    status:'notyet', date:new Date().toISOString().slice(0,10), followup:'',
+    notes:`נמצא במפת BizSite AI · קטגוריה: ${catLabel} · סטטוס אתר בזמן הסימון: ${STATUS_LABEL[b.status]}`
+  });
+  saveCRM();
+  return true;
+}
+function crmStatusText(s){ return s==='contacted'?'התקשרתי':s==='offered'?'הצעתי אתר':s==='closed'?'סגרתי עסקה':s==='notinterested'?'לא מעוניין':'טרם פניתי'; }
+function crmWaLink(phone){ let p=normPhone(phone); if(!p) return ''; if(p.startsWith('0')) p='972'+p.slice(1); return `https://wa.me/${p}`; }
+
+function renderCRM(){
+  const q = normCRM(document.getElementById('crmSearch').value);
+  const filtered = crmContacts.filter(c=>!q || normCRM(c.name+c.city+c.notes).includes(q));
+  document.getElementById('crm-total').textContent = crmContacts.length;
+  document.getElementById('crm-contacted').textContent = crmContacts.filter(c=>c.status==='contacted'||c.status==='closed').length;
+  document.getElementById('crm-offered').textContent = crmContacts.filter(c=>c.status==='offered').length;
+  document.getElementById('crm-notyet').textContent = crmContacts.filter(c=>c.status==='notyet').length;
+
+  document.getElementById('crmList').innerHTML = filtered.map(c=>`
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center">
+      <div style="min-width:200px">
+        <div style="font-weight:700;font-size:14.5px">${c.name}</div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px">${c.city||''} ${c.phone?'· '+c.phone:''}</div>
+        <div style="color:var(--muted);font-size:11px;margin-top:5px;max-width:420px">${c.notes||''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="status-tag" style="background:var(--surface2);color:var(--text);padding:4px 10px">${crmStatusText(c.status)}</span>
+        ${c.phone?`<a href="tel:${c.phone}" class="pill" style="text-decoration:none">📞</a><a href="${crmWaLink(c.phone)}" target="_blank" class="pill" style="text-decoration:none">💬</a>`:''}
+        <select data-id="${c.id}" class="crmStatusSel pill" style="cursor:pointer;padding:8px 10px">
+          <option value="notyet" ${c.status==='notyet'?'selected':''}>טרם פניתי</option>
+          <option value="contacted" ${c.status==='contacted'?'selected':''}>התקשרתי</option>
+          <option value="offered" ${c.status==='offered'?'selected':''}>הצעתי אתר</option>
+          <option value="closed" ${c.status==='closed'?'selected':''}>סגרתי עסקה</option>
+          <option value="notinterested" ${c.status==='notinterested'?'selected':''}>לא מעוניין</option>
+        </select>
+        <button data-id="${c.id}" class="crmRemove pill" style="cursor:pointer;color:var(--red)">מחק</button>
+      </div>
+    </div>`).join('') || `<div style="text-align:center;color:var(--muted);padding:40px 10px;font-size:13px">אין עדיין פניות. סמן עסקים במפה עם ➕ כדי להוסיף אותם לכאן.</div>`;
+
+  document.querySelectorAll('.crmStatusSel').forEach(sel=>sel.addEventListener('change',()=>{
+    const c = crmContacts.find(x=>x.id==sel.dataset.id); if(c){ c.status=sel.value; saveCRM(); renderCRM(); }
+  }));
+  document.querySelectorAll('.crmRemove').forEach(btn=>btn.addEventListener('click',()=>{
+    crmContacts = crmContacts.filter(x=>x.id!=btn.dataset.id); saveCRM(); renderCRM();
+  }));
+}
+document.getElementById('crmSearch').addEventListener('input', renderCRM);
+document.getElementById('crmExport').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(crmContacts,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='business-tracker-backup.json'; a.click();
+});
+document.getElementById('crmImportBtn').addEventListener('click', ()=>document.getElementById('crmImportFile').click());
+document.getElementById('crmImportFile').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const data = JSON.parse(r.result);
+      if(!Array.isArray(data)) throw 0;
+      let added=0;
+      for(const c of data){ if(c.name && !findDupeCRM(c.name,c.phone)){ crmContacts.push({...c, id:Date.now()+Math.random()}); added++; } }
+      saveCRM(); renderCRM();
+      alert(`יובאו ${added} פניות חדשות.`);
+    }catch{ alert('קובץ לא תקין.'); }
+  };
+  r.readAsText(file);
+});
+
+/* add-to-CRM from generator modal */
+document.getElementById('modalAddCrm').addEventListener('click', ()=>{
+  if(selected===null) return;
+  const ok = addToCRM(BUSINESSES[selected]);
+  document.getElementById('modalAddCrm').textContent = ok ? '✓ נוסף למעקב' : 'כבר במעקב';
+});
+</script>
+</body>
+</html>
