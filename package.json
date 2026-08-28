@@ -1,0 +1,13 @@
+{
+  "name": "bizsite-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node test/places.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.0"
+  }
+}
