@@ -673,20 +673,31 @@ const modalTitle = document.getElementById('modalTitle');
 // Real build stages. Each one flips when the request behind it actually
 // finishes - the old version ran these off a fixed setTimeout ladder while
 // nothing happened underneath.
-const STEPS = [
+const STEPS_TEMPLATE = [
   'מאתר את העסק ב-Google Places...',
   'מושך תמונות, ביקורות ושעות פתיחה אמיתיות...',
   'בוחר את שפת העיצוב של הקטגוריה...',
   'מרכיב את עמוד הנחיתה...'
 ];
+const STEPS_AI = [
+  'מאתר את העסק ב-Google Places...',
+  'מושך תמונות, ביקורות ושעות פתיחה אמיתיות...',
+  'שולח לעיצוב ל-AI (Llama 3.3, חינם דרך Cloudflare)...',
+  'מקבל HTML מותאם לעסק ומאבטח אותו...'
+];
+function getSteps(){ return useAI ? STEPS_AI : STEPS_TEMPLATE; }
 
 function slug(name){ return name.replace(/["'׳״]/g,'').replace(/[^\w֐-׿]+/g,'-').toLowerCase().replace(/^-+|-+$/g,'') || 'business'; }
 
 let currentBusiness = null;
 let currentStyle = '';
+// Default on: /api/site prefers the LLM path when the AI binding is enabled.
+// If AI fails or is over quota, the Worker silently falls back to templates.
+let useAI = true;
 
 function renderSteps(){
-  genSteps.innerHTML = STEPS.map((s,i)=>`<div class="gen-step" id="gstep${i}"><div class="gen-check"></div><span>${s}</span></div>`).join('');
+  const steps = getSteps();
+  genSteps.innerHTML = steps.map((s,i)=>`<div class="gen-step" id="gstep${i}"><div class="gen-check"></div><span>${s}</span></div>`).join('');
 }
 function markStep(i, state){
   const el = document.getElementById(`gstep${i}`);
@@ -708,6 +719,7 @@ function buildParams(b){
   if(b.addr) p.set('addr', b.addr);
   if(b.phone) p.set('phone', b.phone);
   if(b.rating) p.set('rating', String(b.rating));
+  if(!useAI) p.set('llm', '0');
   return p;
 }
 
@@ -755,18 +767,34 @@ function renderStyleBar(b, meta){
   const bar = document.getElementById('styleBar');
   if(!bar) return;
   const active = currentStyle || meta.theme;
+  // meta.source is 'llm' (Workers AI wrote the HTML) or 'template' (fallback).
+  const sourceLabel = meta.source === 'llm' ? '🪄 AI · Llama 3.3' : '📐 תבנית';
+  const sourceTitle = meta.fell_back_from_llm
+    ? 'ה-AI לא הצליח (' + meta.fell_back_from_llm + ') — הוצג עיצוב תבנית'
+    : (meta.source === 'llm' ? 'הדף נכתב לגמרי ע"י Llama 3.3 (Cloudflare AI, חינם)' : 'הדף נבנה מתבניות דטרמיניסטיות');
   bar.innerHTML =
     `<span class="sb-label">🎨 ${meta.brief}</span>` +
+    `<button class="sb-ai${useAI ? ' on' : ''}" id="btnAI" title="הפעלה/כיבוי של יצירת HTML ע\"י AI">${useAI ? '✓ AI פעיל' : 'AI כבוי'}</button>` +
+    `<span class="sb-source" title="${sourceTitle}">${sourceLabel}</span>` +
     Object.keys(THEMES).map(k=>`<button class="sb-chip${k===active?' on':''}" data-style="${k}">${THEMES[k].label}</button>`).join('') +
     `<button class="sb-3d" id="btn3d">🧊 ייצוא אתר 3D</button>`;
   bar.querySelectorAll('.sb-chip').forEach(btn=>btn.addEventListener('click',()=>{
     currentStyle = btn.dataset.style;
-    browserEl.classList.remove('show');
-    genWrap.style.display='flex';
-    renderSteps();
-    renderSite(b, currentStyle).catch(showGenError);
+    rebuild(b);
   }));
+  document.getElementById('btnAI').addEventListener('click', ()=>{
+    useAI = !useAI;
+    rebuild(b);
+  });
   document.getElementById('btn3d').addEventListener('click', ()=>export3d(b));
+}
+
+/** Shared: re-render the preview after any user choice (theme, AI toggle). */
+function rebuild(b){
+  browserEl.classList.remove('show');
+  genWrap.style.display='flex';
+  renderSteps();
+  renderSite(b, currentStyle).catch(showGenError);
 }
 
 /** Download the React + Vite project for this business. */

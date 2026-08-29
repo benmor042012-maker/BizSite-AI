@@ -14,7 +14,37 @@ the tool:
 | `red`   | אתר חלש   | Only a Facebook/Instagram/aggregator page      |
 | `green` | אתר טוב   | Has a real site of its own                     |
 
+## Two paths, one endpoint
+
+`/api/site` serves a generated site through one of two paths:
+
+- **AI path** (default when `env.AI` binding is present) — Cloudflare Workers
+  AI runs `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with a rich prompt built
+  from the business's Places record, the resolved theme, and the category
+  brief. The model writes the entire HTML document. Output is sanitised
+  (scripts, event handlers and non-Google-Maps iframes are stripped) and
+  verified before being served. Falls back silently to the template path on
+  any of: quota, error, or unsafe output.
+
+- **Template path** (`?llm=0`, or automatic fallback) — three deterministic
+  layout archetypes (`showcase` / `authority` / `local`) driven by
+  per-category briefs. Zero cost, milliseconds to render, always works.
+
+The `X-BizSite-Source` response header names which path served the request
+(`llm` or `template`). The frontend surfaces this as a badge in the style bar.
+
+### What "free" means
+
+Cloudflare Workers AI includes a free tier of 10,000 neurons/day. A single
+Llama 3.3 70B site build runs ~40–80 neurons, so the free tier fits roughly
+120–250 unique site generations per day, cached for 30 days each. No card,
+no key, no external API — the model runs inside the Worker.
+
+There is no Anthropic key involved anywhere. No paid API of any kind.
+
 ## The design system
+
+
 
 Every trade gets its own design, not a shared template. `src/design/categories.js`
 holds one **brief** per category — 21 of them — and each brief picks:

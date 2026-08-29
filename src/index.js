@@ -1,10 +1,13 @@
 import { CITIES, CATEGORIES, searchCategory } from './places.js';
 import { fetchPlaceDetails, toReviews, photoNames } from './placeDetails.js';
 import { buildSite } from './design/buildSite.js';
+import { generateSite } from './design/llm/generate.js';
+
+import { computeOpenNow } from './design/openNow.js';
 import { buildScaffold } from './design/three/scaffold.js';
 import { getPromptText } from './design/three/prompts.js';
 import { getBrief, DESIGN_BRIEFS } from './design/categories.js';
-import { STYLE_THEMES } from './design/themes.js';
+import { STYLE_THEMES, getTheme } from './design/themes.js';
 import { zipSync } from './zip.js';
 
 /**
@@ -137,12 +140,51 @@ async function enrich(lead, apiKey, placeId) {
   };
 }
 
+
+/**
+ * Assemble the flat context object the LLM prompt reads.
+ *
+ * `enrich()` gives us lead + place; the prompt wants the resolved values so
+ * it does not have to know either shape. Kept out of buildSite so the two
+ * paths cannot drift on which fields matter.
+ */
+function buildLlmCtx({ lead, place, style }) {
+  const brief = getBrief(lead.cat);
+  const theme = getTheme(style || brief.theme);
+  const name = place?.displayName?.text || lead.name;
+  const city = lead.cityLabel || lead.city || '';
+  const address = place?.formattedAddress || lead.addr || '';
+  const phone = place?.nationalPhoneNumber || lead.phone || '';
+  const intlPhone = place?.internationalPhoneNumber || phone;
+  const waDigits = String(intlPhone).replace(/\D/g, '');
+  const waLink = waDigits
+    ? `https://wa.me/${waDigits}?text=${encodeURIComponent(`${brief.wa} (${name})`)}`
+    : '';
+  const telLink = phone ? `tel:${phone}` : '';
+  const mapUrl = address ? `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed&hl=iw` : '';
+  const mapLink = address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${name} ${address}`)}` : '';
+  return {
+    lead, place, brief, theme,
+    name, city, address, phone,
+    rating: place?.rating || lead.rating || null,
+    reviewCount: place?.userRatingCount ?? null,
+    about: place?.editorialSummary?.text || '',
+    hoursLines: place?.regularOpeningHours?.weekdayDescriptions || [],
+    openNow: computeOpenNow(place?.regularOpeningHours?.periods),
+    reviews: lead.reviews || [],
+    photos: (lead.photos || []).map(n => `/api/photo?name=${encodeURIComponent(n)}`),
+    waLink, telLink, mapUrl, mapLink,
+  };
+}
+
 async function handleSite(request, env, ctx) {
   const url = new URL(request.url);
   const params = url.searchParams;
   const lead = leadFromQuery(params);
   const placeId = params.get('placeId') || '';
   const style = params.get('style') || '';
+  // llm=0 forces the template path (for comparison). Anything else = try LLM.
+  const wantLlm = params.get('llm') !== '0';
 
   if (!placeId && !lead.name) {
     return json({ error: 'placeId or name is required' }, 400);
@@ -168,7 +210,26 @@ async function handleSite(request, env, ctx) {
   }
 
   const enriched = await enrich(lead, apiKey, placeId);
-  const { html, meta } = buildSite({ ...enriched, style, origin: url.origin });
+  const templateOut = buildSite({ ...enriched, style, origin: url.origin });
+
+  let html = templateOut.html;
+  let source = 'template';
+  let llmMeta = null;
+  let fellBackReason = null;
+
+  if (wantLlm) {
+    const llmCtx = buildLlmCtx({ ...enriched, style });
+    const gen = await generateSite({ ctx: llmCtx, ai: env.AI });
+    if (gen.ok) {
+      html = gen.html;
+      source = 'llm';
+      llmMeta = { model: gen.model, neurons: gen.neurons };
+    } else {
+      fellBackReason = gen.reason;
+    }
+  }
+
+  const meta = { ...templateOut.meta, source, ...(llmMeta ? { llm: llmMeta } : {}), ...(fellBackReason ? { fell_back_from_llm: fellBackReason } : {}) };
 
   const response = new Response(html, {
     headers: {
@@ -176,6 +237,7 @@ async function handleSite(request, env, ctx) {
       'Cache-Control': `public, max-age=${SITE_CACHE_SECONDS}`,
       // Lets the frontend label the preview without parsing the document.
       'X-BizSite-Meta': encodeURIComponent(JSON.stringify(meta)),
+      'X-BizSite-Source': source,
     },
   });
   ctx.waitUntil(cache.put(cacheKey, response.clone()));
